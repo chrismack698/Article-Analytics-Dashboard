@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis, LineChart, Line, Cell
@@ -36,11 +36,6 @@ const parseMoney = (v) => {
   return isNaN(n) ? 0 : n;
 };
 
-const parseNum = (v) => {
-  if (v == null) return 0;
-  const n = parseFloat(String(v).replace(/[$,]/g, ""));
-  return isNaN(n) ? 0 : n;
-};
 
 const fmt$ = (v) => parseFloat(v).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN = (v) => Number(v).toLocaleString();
@@ -103,8 +98,8 @@ const parseCSV = (text, filename) => {
     rows.push({
       url,
       earnings: parseMoney(obj["Earnings"]),
-      pageviews: parseNum(obj["Pageviews"]),
-      impressionsPerPV: parseNum(obj["Impressions Per Pageview"]),
+      pageviews: parseMoney(obj["Pageviews"]),
+      impressionsPerPV: parseMoney(obj["Impressions Per Pageview"]),
       date: obj["Updated Date"] || "",
       author: obj["Author"] || "Unknown",
       rpm: parseMoney(obj["Page RPM"]),
@@ -432,7 +427,7 @@ const ChartTooltip = ({ active, payload, label }) => {
           <span style={{ color: p.color || DS.accent }}>{p.name}: </span>
           <span style={{ color: DS.textBright, fontWeight: 600 }}>
             {typeof p.value === "number"
-              ? p.name?.toLowerCase().includes("view") || p.name?.toLowerCase().includes("page")
+              ? p.name?.toLowerCase() === "pageviews" || p.name?.toLowerCase() === "total pageviews"
                 ? fmtN(p.value)
                 : fmt$(p.value)
               : p.value}
@@ -493,6 +488,9 @@ const TopArticles = ({ rows, sortMetric, categoryFilter, onClearFilter, seriesMa
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(sortMetric);
   const [dir, setDir] = useState("desc");
+
+  // Sync internal sort when the parent's sortMetric prop changes
+  useEffect(() => { setSort(sortMetric); setPage(0); }, [sortMetric]);
   const [page, setPage] = useState(0);
   const [seriesFilter, setSeriesFilter] = useState(null);
   const PAGE = 25;
@@ -825,8 +823,8 @@ const SeriesSection = ({ seriesMap }) => {
         </thead>
         <tbody>
           {seriesList.map(s => (
-            <>
-              <tr key={s.key}
+            <React.Fragment key={s.key}>
+              <tr
                 style={{ cursor: "pointer" }}
                 onClick={() => setExpanded(expanded === s.key ? null : s.key)}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(85,232,255,0.04)"}
@@ -842,7 +840,7 @@ const SeriesSection = ({ seriesMap }) => {
                 <td style={{ ...S.td, color: s.trendColor, fontWeight: 600, fontSize: 12 }}>{s.trend}</td>
               </tr>
               {expanded === s.key && (
-                <tr key={s.key + "_detail"}>
+                <tr>
                   <td colSpan={7} style={{ padding: "0 0 0 24px", background: DS.surface2 }}>
                     <div style={{ padding: "12px 16px 12px 0" }}>
                       <div style={{ display: "flex", gap: 20, alignItems: "flex-end", marginBottom: 10 }}>
@@ -882,7 +880,7 @@ const SeriesSection = ({ seriesMap }) => {
                   </td>
                 </tr>
               )}
-            </>
+            </React.Fragment>
           ))}
         </tbody>
       </table>
@@ -1439,8 +1437,7 @@ export default function App() {
                             });
                             return Object.values(map)
                               .map(a => ({ ...a, rpm: a.rpmSum / a.count, cpm: a.cpmSum / a.count }))
-                              .map(a => ({ ...a, sortVal: sortMetric === "rpm" || sortMetric === "cpm" ? a[sortMetric] : a[sortMetric] }))
-                              .sort((a, b) => b.sortVal - a.sortVal)
+                              .sort((a, b) => b[sortMetric] - a[sortMetric])
                               .map((a, i) => (
                                 <tr key={i}>
                                   <td style={{ ...S.td, color: DS.name, fontWeight: 600 }}>{a.author}</td>
